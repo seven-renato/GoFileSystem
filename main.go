@@ -172,8 +172,12 @@ func operateFileSystem(FileSystem *FURGFileSystem) {
 		case 1:
 			fmt.Println("Opção 1: Copiar arquivo para o sistema de arquivos.")
 			fmt.Print("Digite o caminho completo do arquivo para copiar: ")
-			var path string
-			fmt.Scanln(&path)
+			var externalPath string
+			fmt.Scanln(&externalPath)
+
+			fmt.Print("Digite o caminho completo no FurgFS2 onde o arquivo vai ficar: (digite / para raiz) ")
+			var internalPath string
+			fmt.Scanln(&internalPath)
 
 			fmt.Print("Digite o bit de proteção (1 para protegido, 0 para não protegido): ")
 			var protectionBit int
@@ -184,8 +188,7 @@ func operateFileSystem(FileSystem *FURGFileSystem) {
 			}
 			isProtected := protectionBit == 1
 
-			fmt.Printf("Arquivo '%s' será copiado com proteção: %d\n", path, protectionBit)
-			FileSystem.copyFileToFileSystem(path, "", isProtected)
+			FileSystem.copyFileToFileSystem(externalPath, internalPath, isProtected)
 		case 2:
 			fmt.Println("Opção 2: Remover arquivo do sistema de arquivos.")
 			fmt.Print("Digite o nome completo do arquivo(com extensão) para remover: ")
@@ -337,8 +340,14 @@ func (fs *FURGFileSystem) copyFileToFileSystem(externalPath string, internalPath
 		return false
 	}
 
-	if checkFileNameAlreadyExists(fileNameArray, fs) != -1 {
-		fmt.Printf("O arquivo com nome '%s' já foi armazenado no sistema de arquivos.", fileName)
+	fatherFileEntry, err := fs.GetPathPointer(internalPath)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	if fs.VerifyFilEntryExists(fileName, fatherFileEntry) {
+		fmt.Println("erro: arquivo com o mesmo nome já existe no diretório pai.")
 		return false
 	}
 
@@ -405,6 +414,7 @@ func (fs *FURGFileSystem) copyFileToFileSystem(externalPath string, internalPath
 				Size:         fileSizeUint32,
 				FirstBlockID: firstBlock,
 				Protected:    protected,
+				Father:       fatherFileEntry,
 			}
 			break
 		}
