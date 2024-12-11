@@ -346,6 +346,9 @@ func (fs *FURGFileSystem) copyFileToFileSystem(externalPath string, internalPath
 		return false
 	}
 
+	var pathArray [128]byte
+	copy(pathArray[:], internalPath)
+
 	if fs.VerifyFilEntryExists(fileName, fatherFileEntry) {
 		fmt.Println("erro: arquivo com o mesmo nome já existe no diretório pai.")
 		return false
@@ -411,6 +414,7 @@ func (fs *FURGFileSystem) copyFileToFileSystem(externalPath string, internalPath
 		if entry.Name[0] == 0 {
 			fs.RootDir[i] = FileEntry{
 				Name:         fileNameArray,
+				Path:         pathArray,
 				Size:         fileSizeUint32,
 				FirstBlockID: firstBlock,
 				Protected:    protected,
@@ -513,9 +517,25 @@ func (fs *FURGFileSystem) GetPathPointer(path string) (*FileEntry, error) {
 
 func (fs *FURGFileSystem) Tree() {
 	fmt.Println("/")
-	for _, v := range fs.RootDir {
-		if v.IsDirectory {
-			fmt.Printf("caminho: %s ---- nome:%s\n", string(v.Path[:]), string(v.Name[:]))
+	// Começa listando os arquivos e diretórios sem pai (root)
+	for i := range fs.RootDir {
+		entry := &fs.RootDir[i]
+		name := string(bytes.Trim(entry.Name[:], "\x00")) // Remove bytes nulos do nome
+		path := string(bytes.Trim(entry.Path[:], "\x00")) // Remove bytes nulos do path
+		if entry.IsDirectory {
+			if entry.Father == nil {
+				fmt.Printf("📁/%s\n", name)
+			} else {
+				fmt.Printf("📁%s/%s\n", path, name)
+			}
+		} else {
+			if name != "" {
+				if entry.Father == nil {
+					fmt.Printf("📄/%s (Size: %d bytes)\n", name, entry.Size)
+				} else {
+					fmt.Printf("📄%s/%s (Size: %d bytes)\n", path, name, entry.Size)
+				}
+			}
 		}
 	}
 }
@@ -525,18 +545,18 @@ func removeFileFromFileSystem(FileSystem *FURGFileSystem, FileName string) error
 	copy(fileNameArray[:], FileName)
 
 	if isAllNullBytes(FileName) {
-		return fmt.Errorf("Erro: Não existem arquivos com nome vazio.\n")
+		return fmt.Errorf("erro: Não existem arquivos com nome vazio")
 	}
 
 	rootDirIndex := checkFileNameAlreadyExists(fileNameArray, FileSystem)
 	if rootDirIndex == -1 {
-		return fmt.Errorf("Erro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos.\n", FileName)
+		return fmt.Errorf("rro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos", FileName)
 	}
 
 	f := FileSystem.RootDir[rootDirIndex]
 
 	if f.Protected {
-		return fmt.Errorf("Erro: Arquivo protegido, troque sua proteção para poder remover.")
+		return fmt.Errorf("erro: Arquivo protegido, troque sua proteção para poder remover")
 	}
 
 	nextBlockId := f.FirstBlockID
@@ -559,17 +579,17 @@ func renameFileFromFileSystem(FileSystem *FURGFileSystem, OldFileName string, Ne
 
 	rootDirIndex := checkFileNameAlreadyExists(oldFileNameArray, FileSystem)
 	if rootDirIndex == -1 {
-		return fmt.Errorf("Erro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos.\n", OldFileName)
+		return fmt.Errorf("erro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos", OldFileName)
 	}
 
 	var newFileNameArray [32]byte
 	copy(newFileNameArray[:], NewFileName)
 	if FileSystem.RootDir[rootDirIndex].Protected {
-		return fmt.Errorf("Erro: Arquivo protegido, troque sua proteção para poder remover.")
+		return fmt.Errorf("erro: Arquivo protegido, troque sua proteção para poder remover")
 	}
 	FileSystem.RootDir[rootDirIndex].Name = newFileNameArray
 
-	fmt.Printf("Arquivo '%d' renomeado, antes era '%d", NewFileName, OldFileName)
+	fmt.Printf("arquivo '%s' renomeado, antes era '%s", NewFileName, OldFileName)
 	return nil
 }
 
@@ -585,9 +605,10 @@ func isAllNullBytes(s string) bool {
 func showAllFilesFromFileSystem(FileSystem *FURGFileSystem) {
 	for i, file := range FileSystem.RootDir {
 		fileName := string(file.Name[:])
+		path := string(file.Path[:])
 
 		if fileName != "" && !isAllNullBytes(fileName) {
-			fmt.Printf("%d. %s", i, fileName)
+			fmt.Printf("%d. %s - path: %s", i, fileName, path)
 			fmt.Printf("  -  %s\n", map[bool]string{true: "protegido", false: "desprotegido"}[file.Protected])
 		}
 	}
@@ -610,12 +631,12 @@ func changePermission(FileSystem *FURGFileSystem, FileName string) error {
 	copy(fileNameArray[:], FileName)
 
 	if isAllNullBytes(FileName) {
-		return fmt.Errorf("Erro: Não existem arquivos com nome vazio.\n")
+		return fmt.Errorf("erro: Não existem arquivos com nome vazio")
 	}
 
 	rootDirIndex := checkFileNameAlreadyExists(fileNameArray, FileSystem)
 	if rootDirIndex == -1 {
-		return fmt.Errorf("Erro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos.\n", FileName)
+		return fmt.Errorf("erro: O arquivo com nome '%s' não foi armazenado no sistema de arquivos", FileName)
 	}
 
 	f := &FileSystem.RootDir[rootDirIndex]
