@@ -494,6 +494,32 @@ func (fs *FURGFileSystem) CreateDirectory(name string, path string) error {
 	return nil
 }
 
+func (fs *FURGFileSystem) DeleteDirectory(name, path string) {
+	var nameArray [32]byte
+	copy(nameArray[:], name)
+
+	var pathArray [128]byte
+	copy(pathArray[:], path)
+
+	if isAllNullBytes(name) {
+		fmt.Println("erro: Não existem diretórios com nome vazio")
+		return
+	}
+
+	if !fs.CheckDirectoryExists(path) {
+		fmt.Printf("erro: O caminho '%s' não existe", path)
+		return
+	}
+
+	if i := fs.CheckFileEntryAlreadyExists(nameArray, pathArray); i != -1 {
+		fs.RootDir[i] = FileEntry{}
+		fmt.Printf("Diretório '%s' removido com sucesso\n", name)
+		return
+	}
+
+	fmt.Printf("erro: Diretório '%s' não encontrado\n", name)
+}
+
 func (fs *FURGFileSystem) AddFileEntry(fileEntry FileEntry) error {
 	for i, entry := range fs.RootDir {
 		if entry.Name[0] == 0 {
@@ -513,10 +539,17 @@ func (fs *FURGFileSystem) CheckDirectoryExists(path string) bool {
 		trimmedExistingName := string(bytes.Trim(v.Name[:], "\x00"))
 		trimmedExistingPath := string(bytes.Trim(v.Path[:], "\x00"))
 
-		if path == trimmedExistingPath+trimmedExistingName {
-			fmt.Println("encontrou o path")
-			if fs.RootDir[i].IsDirectory {
-				return true
+		if trimmedExistingPath == "/" {
+			if path == "/"+trimmedExistingName {
+				if fs.RootDir[i].IsDirectory {
+					return true
+				}
+			}
+		} else {
+			if path == trimmedExistingPath+"/"+trimmedExistingName {
+				if fs.RootDir[i].IsDirectory {
+					return true
+				}
 			}
 		}
 	}
