@@ -510,9 +510,10 @@ func (fs *FURGFileSystem) CheckPathExists(path string) bool {
 	}
 
 	for i, v := range fs.RootDir {
+		trimmedExistingName := string(bytes.Trim(v.Name[:], "\x00"))
 		trimmedExistingPath := string(bytes.Trim(v.Path[:], "\x00"))
 
-		if path == trimmedExistingPath {
+		if path == trimmedExistingPath+trimmedExistingName {
 			fmt.Println("encontrou o path")
 			if fs.RootDir[i].IsDirectory {
 				return true
@@ -534,7 +535,7 @@ func (fs *FURGFileSystem) Tree() {
 			if path == "/" {
 				fmt.Printf("/%s (Size: %d bytes)\n", name, entry.Size)
 			} else {
-				fmt.Printf("%s/%s (Size: %d bytes)", path, name, entry.Size)
+				fmt.Printf("%s/%s (Size: %d bytes)\n", path, name, entry.Size)
 			}
 		}
 
