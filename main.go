@@ -467,7 +467,7 @@ func (fs *FURGFileSystem) CreateDirectory(name string, path string) error {
 	}
 
 	// verificar se o path existe
-	if !fs.CheckPathExists(path) {
+	if !fs.CheckDirectoryExists(path) {
 		return fmt.Errorf("erro: O caminho '%s' não existe", path)
 	}
 
@@ -504,7 +504,7 @@ func (fs *FURGFileSystem) AddFileEntry(fileEntry FileEntry) error {
 	return fmt.Errorf("erro: Não foi possível adicionar a entrada de arquivo ao sistema de arquivos")
 }
 
-func (fs *FURGFileSystem) CheckPathExists(path string) bool {
+func (fs *FURGFileSystem) CheckDirectoryExists(path string) bool {
 	if path == "/" {
 		return true
 	}
