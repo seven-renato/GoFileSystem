@@ -726,20 +726,20 @@ func (fs *FURGFileSystem) CopyFileFromFileSystem(fileName, internalPath, externa
 
 	// Verificar se o nome do arquivo é vazio
 	if isAllNullBytes(fileName) {
-		return fmt.Errorf("Erro: Não existem arquivos com nome vazio.")
+		return fmt.Errorf("erro: Não existem arquivos com nome vazio")
 	}
 
 	// Localizar o arquivo no diretório raiz
 	rootDirIndex := fs.CheckFileEntryAlreadyExists(fileNameArray, internalPathArray)
 	if rootDirIndex == -1 {
-		return fmt.Errorf("Erro: O arquivo com nome '%s' não foi encontrado no sistema de arquivos.\n", fileName)
+		return fmt.Errorf("erro: O arquivo com nome '%s' não foi encontrado no sistema de arquivos", fileName)
 	}
 
 	fileEntry := fs.RootDir[rootDirIndex]
 
 	destFile, err := os.Create(externalPath)
 	if err != nil {
-		return fmt.Errorf("Erro ao criar o arquivo no sistema real: %v", err)
+		return fmt.Errorf("erro ao criar o arquivo no sistema real: %v", err)
 	}
 	defer destFile.Close()
 
@@ -748,18 +748,18 @@ func (fs *FURGFileSystem) CopyFileFromFileSystem(fileName, internalPath, externa
 		offset := int64(fs.Header.DataStart + (currentBlockID * fs.Header.BlockSize))
 		_, err := fs.FilePointer.Seek(offset, 0)
 		if err != nil {
-			return fmt.Errorf("Erro ao mover ponteiro para bloco %d: %v", currentBlockID, err)
+			return fmt.Errorf("erro ao mover ponteiro para bloco %d: %v", currentBlockID, err)
 		}
 
 		buf := make([]byte, fs.Header.BlockSize)
 		bytesRead, err := fs.FilePointer.Read(buf)
 		if err != nil && err != io.EOF {
-			return fmt.Errorf("Erro ao ler bloco %d: %v", currentBlockID, err)
+			return fmt.Errorf("erro ao ler bloco %d: %v", currentBlockID, err)
 		}
 
 		_, err = destFile.Write(buf[:bytesRead])
 		if err != nil {
-			return fmt.Errorf("Erro ao escrever dados no arquivo destino: %v", err)
+			return fmt.Errorf("erro ao escrever dados no arquivo destino: %v", err)
 		}
 
 		currentBlockID = fs.FAT[currentBlockID].NextBlockID
