@@ -14,17 +14,108 @@ import (
 
 func main() {
 	// fmt.Printf("O tamanho de FATEntry e %d bytes \n", unsafe.Sizeof(FATEntry{})) -> 12 bytes, compilador adiciona 3 bytes apos o campo USED para alinha ao tamanho com os outros campos -> Facilita a busca e acesso em memoria
-	fsSize := getFileSystemSize()
-	if fsSize == 0 {
-		return
+	fileName := "furg.fs2"
+	if _, err := os.Stat(fileName); err == nil {
+		fmt.Println("Arquivo do sistema de arquivos encontrado. Carregando...")
+		fs, err := loadFileSystem(fileName)
+		if err != nil {
+			fmt.Println("Erro ao carregar o sistema de arquivos:", err)
+			return
+		}
+		fs.operateFileSystem()
+	} else {
+		fmt.Println("Nenhum sistema de arquivos existente encontrado. Criando um novo...")
+		fsSize := getFileSystemSize()
+		if fsSize == 0 {
+			return
+		}
+		var blockSize uint32 = 4096
+		fs, err := createFileSystem(blockSize, fsSize)
+		if err != nil {
+			fmt.Println("Erro ao criar o sistema de arquivos:", err)
+			return
+		}
+		fs.operateFileSystem()
 	}
-	var blockSize uint32 = 4096
-	fs, err := createFileSystem(blockSize, fsSize)
+}
+
+func loadFileSystem(fileName string) (*FURGFileSystem, error) {
+	f, err := os.OpenFile(fileName, os.O_RDWR, 0666)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("erro ao abrir o arquivo: %v", err)
 	}
 
-	fs.operateFileSystem()
+	// Ler o cabeçalho
+	var header Header
+	err = binary.Read(f, binary.LittleEndian, &header)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler o cabeçalho: %v", err)
+	}
+
+	// Calcular tamanhos
+	fatEntrySize := uint32(unsafe.Sizeof(FATEntry{}))
+	fatSize := calculateFATSize(header.TotalSize-header.DataStart, header.BlockSize, fatEntrySize)
+	entriesNumber := (header.DataStart - header.RootDirStart) / uint32(unsafe.Sizeof(FileEntry{}))
+
+	// Ler a FAT
+	fat := make([]FATEntry, fatSize/fatEntrySize)
+	for i := range fat {
+		err = binary.Read(f, binary.LittleEndian, &fat[i])
+		if err != nil {
+			return nil, fmt.Errorf("erro ao ler a FAT: %v", err)
+		}
+	}
+
+	// Ler o diretório raiz
+	rootDir := make([]FileEntry, entriesNumber)
+	for i := range rootDir {
+		err = binary.Read(f, binary.LittleEndian, &rootDir[i])
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("erro ao ler o diretório raiz: %v", err)
+		}
+	}
+
+	fs := FURGFileSystem{
+		Header:      header,
+		FAT:         fat,
+		RootDir:     rootDir,
+		FilePointer: f,
+	}
+
+	fmt.Println("Sistema de arquivos carregado com sucesso.")
+	return &fs, nil
+}
+
+func (fs *FURGFileSystem) saveFileSystemState() error {
+	// Resetar o arquivo para escrever do início
+	_, err := fs.FilePointer.Seek(0, io.SeekStart)
+	if err != nil {
+		return fmt.Errorf("erro ao reposicionar ponteiro no arquivo: %v", err)
+	}
+
+	// Salvar o cabeçalho
+	err = binary.Write(fs.FilePointer, binary.LittleEndian, fs.Header)
+	if err != nil {
+		return fmt.Errorf("erro ao salvar cabeçalho: %v", err)
+	}
+
+	// Salvar a FAT
+	for _, entry := range fs.FAT {
+		err = binary.Write(fs.FilePointer, binary.LittleEndian, entry)
+		if err != nil {
+			return fmt.Errorf("erro ao salvar FAT: %v", err)
+		}
+	}
+
+	// Salvar o diretório raiz
+	for _, entry := range fs.RootDir {
+		err = binary.Write(fs.FilePointer, binary.LittleEndian, entry)
+		if err != nil {
+			return fmt.Errorf("erro ao salvar diretório raiz: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // Create File System
@@ -164,6 +255,8 @@ func (fs *FURGFileSystem) operateFileSystem() {
 		fmt.Println("6. Proteger/desproteger arquivo contra escrita/remoção")
 		fmt.Println("7. Copiar um arquivo do sistema ficticio para o real")
 		fmt.Println("8. Criar diretório")
+		fmt.Println("9. Listar diretórios")
+		fmt.Println("10. Remover diretório")
 		fmt.Println("0. Sair")
 		fmt.Print("Escolha uma opção: ")
 		fmt.Scanln(&option)
@@ -209,7 +302,6 @@ func (fs *FURGFileSystem) operateFileSystem() {
 			if err != nil {
 				fmt.Println(err)
 			}
-
 		case 3:
 			var oldName string
 			var path string
@@ -275,7 +367,7 @@ func (fs *FURGFileSystem) operateFileSystem() {
 				break
 			}
 
-			fmt.Print("Digite o caminho completo onde deseja salvar o arquivo(lembra de colocar a extensao caso queira abrir o arquivo): ")
+			fmt.Print("Digite o caminho completo onde deseja salvar o arquivo(lembrar de colocar a extensao caso queira abrir o arquivo): ")
 			fmt.Scanln(&externalPath)
 			if externalPath == "" {
 				fmt.Println("Erro: Caminho de destino não pode estar vazio.")
@@ -290,11 +382,11 @@ func (fs *FURGFileSystem) operateFileSystem() {
 			}
 		case 8:
 			fmt.Println("Opção 8: Criar diretório.")
-			fmt.Print("Digite o nome do diretório a ser criado: ")
+			fmt.Print("Digite o nome do diretório a ser criado(Não pode conter /): ")
 			var name string
 			fmt.Scanln(&name)
 			var path string
-			fmt.Print("Digite o caminho do diretório pai: ")
+			fmt.Print("Digite o caminho do diretório pai(Exemplo: /, ou /teste):")
 			fmt.Scanln(&path)
 			err := fs.CreateDirectory(name, path)
 
@@ -326,7 +418,13 @@ func (fs *FURGFileSystem) operateFileSystem() {
 				fmt.Printf("Diretório '%s' removido com sucesso no caminho '%s'.\n", name, path)
 			}
 		case 0:
-			fmt.Println("Saindo do sistema. Até logo!")
+			fmt.Println("Encerrando o sistema de arquivos...")
+			err := fs.saveFileSystemState()
+			if err != nil {
+				fmt.Println("Erro ao salvar o estado do sistema de arquivos:", err)
+			} else {
+				fmt.Println("Estado do sistema de arquivos salvo com sucesso.")
+			}
 			return
 
 		default:
@@ -427,6 +525,7 @@ func (fs *FURGFileSystem) CopyFileToFileSystem(externalPath string, internalPath
 				}
 				found = true
 				fs.FAT[i] = tmp
+				fs.Header.FreeSpace -= fs.Header.BlockSize
 				break
 			}
 		}
@@ -467,7 +566,6 @@ func (fs *FURGFileSystem) CopyFileToFileSystem(externalPath string, internalPath
 			break
 		}
 	}
-	fs.Header.FreeSpace -= fileSizeUint32
 	fmt.Printf("Arquivo '%s' copiado com sucesso para o sistema de arquivos.\n", fileName)
 	defer f.Close()
 	return true
@@ -623,8 +721,8 @@ func (fs *FURGFileSystem) RemoveFileFromFileSystem(fileName, path string) error 
 		currentFileEntry := fs.FAT[nextBlockId]
 		nextBlockId = currentFileEntry.NextBlockID
 		fs.FAT[nextBlockId] = FATEntry{}
+		fs.Header.FreeSpace += fs.Header.BlockSize
 	}
-	fs.Header.FreeSpace += fs.RootDir[rootDirIndex].Size
 
 	fs.RootDir[rootDirIndex] = FileEntry{}
 
@@ -669,7 +767,7 @@ func (fs *FURGFileSystem) ShowAllFilesFromFileSystem() {
 		fileName := string(file.Name[:])
 		path := string(file.Path[:])
 
-		if fileName != "" && !isAllNullBytes(fileName) {
+		if fileName != "" && !isAllNullBytes(fileName) && !file.IsDirectory {
 			fmt.Printf("%d. %s - path: %s", i, fileName, path)
 			fmt.Printf("  -  %s\n", map[bool]string{true: "protegido", false: "desprotegido"}[file.Protected])
 		}
