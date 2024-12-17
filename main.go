@@ -1,4 +1,18 @@
+// Para rodar o programa, execute o seguinte comando:
+// go run main.go
+// O programa irá exibir um menu com várias opções para interagir com o sistema de arquivos FURGfs2, os dados dos integrantes do grupo estão dentro de um arquivo já presente no sistema de arquivos ao qual pode ser copiado para o sistema real.
+
 package main
+// O pacote main implementa uma aplicação de sistema de arquivos chamada FURGfs2.
+// Esta aplicação permite aos usuários interagir com um sistema de arquivos, realizando diversas operações,
+// como copiar arquivos, remover arquivos, renomear arquivos, listar arquivos e gerenciar diretórios.
+// O sistema de arquivos é armazenado em um arquivo binário e consiste em um cabeçalho, uma tabela de alocação de arquivos (FAT)
+// e um diretório raiz. 
+// O cabeçalho contém informações sobre o sistema de arquivos, como tamanho total, tamanho dos blocos, espaço livre
+// e endereços da FAT e do diretório raiz.
+// A FAT é usada para controlar o status de alocação de cada bloco no sistema de arquivos.
+// O diretório raiz armazena informações sobre arquivos e diretórios no sistema de arquivos.
+// A estrutura FURGFileSystem representa o estado do sistema de arquivos e fornece métodos para operá-lo.
 
 import (
 	"bufio"
@@ -12,6 +26,9 @@ import (
 	"unsafe"
 )
 
+// main é a função principal que inicia a aplicação do sistema de arquivos FURGfs2.
+// Ele verifica se um arquivo de sistema de arquivos existente está presente e carrega-o, ou cria um novo sistema de arquivos.
+// Em seguida, ele inicia a operação do sistema de arquivos, permitindo que o usuário interaja com ele.
 func main() {
 	// fmt.Printf("O tamanho de FATEntry e %d bytes \n", unsafe.Sizeof(FATEntry{})) -> 12 bytes, compilador adiciona 3 bytes apos o campo USED para alinha ao tamanho com os outros campos -> Facilita a busca e acesso em memoria
 	fileName := "furg.fs2"
@@ -39,6 +56,9 @@ func main() {
 	}
 }
 
+// loadFileSystem carrega um sistema de arquivos existente de um arquivo binário e retorna uma instância de FURGFileSystem.
+// Ele lê o cabeçalho, a FAT e o diretório raiz do arquivo e os armazena na estrutura FURGFileSystem que foram serializados.
+// Se ocorrer um erro ao abrir ou ler o arquivo, ele retorna um erro.
 func loadFileSystem(fileName string) (*FURGFileSystem, error) {
 	f, err := os.OpenFile(fileName, os.O_RDWR, 0666)
 	if err != nil {
@@ -86,6 +106,9 @@ func loadFileSystem(fileName string) (*FURGFileSystem, error) {
 	return &fs, nil
 }
 
+// saveFileSystemState salva o estado atual do sistema de arquivos no arquivo binário.
+// Ele escreve o cabeçalho, a FAT e o diretório raiz no arquivo, serializando-os.
+// Se ocorrer um erro ao reposicionar o ponteiro do arquivo ou escrever os dados, ele retorna um erro.
 func (fs *FURGFileSystem) saveFileSystemState() error {
 	// Resetar o arquivo para escrever do início
 	_, err := fs.FilePointer.Seek(0, io.SeekStart)
@@ -118,8 +141,7 @@ func (fs *FURGFileSystem) saveFileSystemState() error {
 	return nil
 }
 
-// Create File System
-
+// getFileSystemSize exibe um menu para o usuário escolher o tamanho do sistema de arquivos.
 func getFileSystemSize() uint32 {
 	var size uint32
 	running := true
@@ -202,6 +224,9 @@ func calculateHeaderSize() uint32 {
 	return HeaderSize
 }
 
+// createFileSystem cria um novo sistema de arquivos com o tamanho total especificado e o tamanho do bloco.
+// Ele cria um arquivo binário para armazenar o sistema de arquivos e escreve o cabeçalho inicial no arquivo.
+// Em seguida, ele calcula o tamanho da FAT e do diretório raiz com base no tamanho total e no número de entradas.
 func createFileSystem(BlockSize uint32, TotalSize uint32) (*FURGFileSystem, error) {
 	f, err := os.OpenFile("furg.fs2", os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
@@ -241,8 +266,8 @@ func createFileSystem(BlockSize uint32, TotalSize uint32) (*FURGFileSystem, erro
 	return &fileSystem, nil // Retornar pontiero pois ao inves de duplicar a memoria, apenas retorna o ponteiro de referencia a ele.
 }
 
-// Operate in File System
-
+// operateFileSystem exibe um menu para o usuário escolher uma opção de operação do sistema de arquivos.
+// Através desse menu todas as funções do sistema de arquivos são acessadas.
 func (fs *FURGFileSystem) operateFileSystem() {
 	var option int
 	for {
